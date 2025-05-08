@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Мясной Прыгун</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: black; font-family: 'Arial Black', sans-serif; }
+    canvas { display: block; background: black; }
+
+    .menu {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 10;
+      text-align: center;
+      color: white;
+    }
+
+    .menu h1 {
+      font-size: 48px;
+      color: crimson;
+      margin-bottom: 40px;
+      text-shadow: 2px 2px black;
+    }
+
+    .menu button {
+      font-size: 28px;
+      padding: 15px 30px;
+      margin: 15px;
+      background: crimson;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 10px;
+      box-shadow: 0 0 10px red;
+    }
+
+    .hud {
+      position: absolute;
+      top: 10px; left: 10px;
+      font-size: 24px;
+      color: white;
+      background: rgba(0,0,0,0.6);
+      padding: 10px 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 5px crimson;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div class="hud" id="hud">
+    <div id="scoreDisplay">Счёт: 0</div>
+    <div id="livesDisplay">Жизни: 3</div>
+  </div>
+
+  <div id="menu" class="menu">
+    <h1>Димон Душегусь</h1>
+    <button onclick="startGame()">Старт</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const menu = document.getElementById('menu');
+    const hud = document.getElementById('hud');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const livesDisplay = document.getElementById('livesDisplay');
+
+    let score = 0;
+    let lives = 3;
+    let gameRunning = false;
+    let gravity = 0.7;
+    let playerSpeed = 2;  // Сниженна скорость препятствий
+    let obstacles = [];
+    let bloodParticles = [];
+    let nextObstacleTime = 0;
+    let player = {
+      x: 30, y: 0, width: 70, height: 70,
+      vy: 0, jumpsLeft: 3,
+      jumpHeight: 19,
+      img: new Image()
+    };
+
+    // Добавляем ссылки на изображения и звуки
+    player.img.src = 'https://wdfiles.ru/plugins/imageviewer/site/thumb.php?s=O8lq&/IMG_20250508_023458_629.jpg'; // Замени на свой URL картинки игрока
+
+    const obstacleImg = new Image();
+    obstacleImg.src = 'https://wdfiles.ru/plugins/imageviewer/site/thumb.php?s=O8lu&/1746742690.jpg'; // Замени на свой URL картинки препятствий
+
+    const jumpSound = new Audio('https://media.vocaroo.com/mp3/1go8my6NERj7');  // Замени на свой URL звука прыжка
+    const hitSound = new Audio('https://media.vocaroo.com/mp3/1iEhjVDvh5mC');  // Замени на свой URL звука удара
+
+    function startGame() {
+      gameRunning = true;
+      score = 0;
+      lives = 3;
+      player.y = canvas.height - 60;
+      player.vy = 0;
+      player.jumpsLeft = 3;
+      obstacles = [];
+      bloodParticles = [];
+      nextObstacleTime = Date.now() + getRandomSpawnDelay();
+      menu.style.display = "none";
+      hud.style.display = "block";
+      requestAnimationFrame(gameLoop);
+    }
+
+    function getRandomSpawnDelay() {
+      return 2500 + Math.random() * 1500; // Увеличена частота появления препятствий на 15%
+    }
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Игрок
+      player.vy += gravity;
+      player.y += player.vy;
+
+      if (player.y >= canvas.height - 60) {
+        player.y = canvas.height - 60;
+        player.vy = 0;
+        player.jumpsLeft = 3;
+      }
+
+      ctx.drawImage(player.img, player.x, player.y, player.width, player.height);
+
+      // Препятствия
+      if (Date.now() > nextObstacleTime) {
+        obstacles.push({ x: canvas.width, width: 120, height: 120 });
+        nextObstacleTime = Date.now() + getRandomSpawnDelay(); // Увеличена частота появления препятствий
+      }
+
+      for (let i = 0; i < obstacles.length; i++) {
+        obstacles[i].x -= 2.5;  // Уменьшена скорость препятствий
+        ctx.drawImage(obstacleImg, obstacles[i].x, canvas.height - 110, obstacles[i].width, obstacles[i].height);
+
+        if (
+          player.x < obstacles[i].x + obstacles[i].width &&
+          player.x + player.width > obstacles[i].x &&
+          player.y + player.height > canvas.height - 60
+        ) {
+          lives--;
+          livesDisplay.innerText = "Жизни: " + lives;
+          hitSound.play();
+          for (let b = 0; b < 50; b++) {  // Увеличено количество кровавых частиц
+            bloodParticles.push({
+              x: player.x + player.width / 2,
+              y: player.y + player.height / 2,
+              vx: (Math.random() - 0.5) * 12,
+              vy: (Math.random() - 1) * 12,
+              radius: 3 + Math.random() * 3,  // Сделана кровь ещё более обильной
+              alpha: 1
+            });
+          }
+          obstacles.splice(i, 1);
+          i--;
+          if (lives <= 0) {
+            setTimeout(() => {
+              gameRunning = false;
+              hud.style.display = "none";
+              menu.style.display = "flex";
+            }, 1500);
+            return;
+          }
+        }
+      }
+
+      // Кровь
+      for (let i = bloodParticles.length - 1; i >= 0; i--) {
+        let p = bloodParticles[i];
+        p.vy += 0.3;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= 0.02;  // Увеличена скорость исчезновения крови
+        if (p.alpha <= 0) {
+          bloodParticles.splice(i, 1);
+          continue;
+        }
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(139,0,0,${p.alpha})`;
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Счёт
+      score++;
+      scoreDisplay.innerText = "Счёт: " + score;
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function jump() {
+      if (!gameRunning) return;
+      if (player.jumpsLeft > 0) {
+        player.vy = -player.jumpHeight;
+        player.jumpsLeft--;
+        jumpSound.play();
+      }
+    }
+
+    window.addEventListener("touchstart", jump);
+    window.addEventListener("keydown", e => {
+      if (e.code === "Space") jump();
+    });
+
+    // Отключение зума и свайпов
+    document.body.addEventListener('touchmove', function(e) {
+      e.preventDefault();
+    }, { passive: false });
+  </script>
+</body>
+</html>
